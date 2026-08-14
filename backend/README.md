@@ -4,8 +4,9 @@ The **relayer + REST API** for GridPulse. It bridges low-cost IoT smart meters
 to the Soroban contract:
 
 - accepts signed meter readings over HTTP, verifies the device's Ed25519
-  signature *locally*, then relays them on-chain via `submit_reading`;
-- triggers atomic P2P settlement via `settle`;
+  signature *locally*, then queues them for on-chain submission;
+- a background **scheduler** drains the queue to the chain in batches
+  (`submit_reading`) and closes settlement windows (`settle`) on a cadence;
 - serves the grid state (config, meters, net positions) for the frontend;
 - exposes operator-only admin endpoints (register meters, set price/fee).
 
@@ -34,7 +35,10 @@ npm run dev          # tsx watch
 | `GET` | `/health` | liveness + contract id + relayer address |
 | `GET` | `/api/overview` | config + every registered meter with net position |
 | `GET` | `/api/meters/:id` | one meter + its net position |
-| `POST` | `/api/readings` | verify + relay a signed reading |
+| `POST` | `/api/readings` | validate + enqueue a signed reading |
+| `POST` | `/api/flush` | drain the queue to the chain now |
+| `GET` | `/api/queue` | pending readings |
+| `GET` | `/api/jobs` | scheduler status (last flush/settle) |
 | `POST` | `/api/settle` | settle all meters (or `{ meter_ids }`) |
 | `POST` | `/api/admin/meters` | register a meter (admin) |
 | `PATCH` | `/api/admin/meters/:id/active` | pause/resume a meter (admin) |
@@ -59,6 +63,35 @@ curl -X POST http://localhost:4000/api/readings \
     "signature": "<128-hex-char ed25519 signature>"
   }'
 ```
+
+Readings are acknowledged immediately (`{"status":"queued", ...}`) and are
+submitted to the chain by the scheduler — or force an immediate drain with
+`POST /api/flush`.
+
+## Relayer & scheduling
+
+Ingest and on-chain submission are decoupled:
+
+1. `POST /api/readings` validates the reading (signature, meter state, nonce
+   ordering — including against other queued readings) and appends it to a
+   **persistent queue** (`$DATA_DIR/readings.json`), so it survives restarts.
+2. The scheduler flushes the queue in FIFO order, `BATCH_SIZE` readings at a
+   time, every `BATCH_INTERVAL_SECONDS`. A contract rejection (stale nonce,
+   inactive meter) is dropped; a transient RPC error stops the batch and leaves
+   the rest queued for the next tick.
+3. If `AUTO_SETTLE` is enabled, the scheduler also closes a settlement window
+   every `SETTLE_INTERVAL_SECONDS`.
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `SCHEDULER_ENABLED` | `true` | run the background jobs (disable for manual-only) |
+| `BATCH_INTERVAL_SECONDS` | `15` | cadence for draining the queue |
+| `BATCH_SIZE` | `50` | max readings per flush |
+| `AUTO_SETTLE` | `true` | close windows automatically |
+| `SETTLE_INTERVAL_SECONDS` | `300` | cadence for settlement |
+
+`GET /api/jobs` reports whether the scheduler is running plus the last flush
+result and last settle error.
 
 ## Roles
 

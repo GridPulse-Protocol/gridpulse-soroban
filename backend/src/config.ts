@@ -21,8 +21,18 @@ export interface AppConfig {
   relayerSecret: string;
   /** Optional operator secret key for admin endpoints (register, price, fee). */
   adminSecret: string | null;
-  /** Directory for the local meter registry (JSON). */
+  /** Directory for the local meter registry + reading queue (JSON). */
   dataDir: string;
+  /** Run the background batch-flush / settle scheduler. */
+  schedulerEnabled: boolean;
+  /** How often to drain the reading queue to the chain. */
+  batchIntervalSeconds: number;
+  /** Max readings submitted per flush. */
+  batchSize: number;
+  /** Close a settlement window on a fixed cadence. */
+  autoSettle: boolean;
+  /** Cadence for auto-settlement. */
+  settleIntervalSeconds: number;
 }
 
 const TESTNET = {
@@ -43,6 +53,24 @@ function required(env: NodeJS.ProcessEnv, key: string): string {
   return value;
 }
 
+function parseBool(env: NodeJS.ProcessEnv, key: string, fallback: boolean): boolean {
+  const value = env[key]?.trim();
+  if (!value) return fallback;
+  if (['1', 'true', 'yes', 'on'].includes(value.toLowerCase())) return true;
+  if (['0', 'false', 'no', 'off'].includes(value.toLowerCase())) return false;
+  throw new Error(`Invalid boolean for ${key}: ${value}`);
+}
+
+function parsePositiveInt(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
+  const value = env[key]?.trim();
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid positive integer for ${key}: ${value}`);
+  }
+  return parsed;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const network = (env.NETWORK ?? 'testnet').toLowerCase();
   const preset = network === 'mainnet' ? MAINNET : TESTNET;
@@ -58,6 +86,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     relayerSecret: required(env, 'RELAYER_SECRET'),
     adminSecret: env.ADMIN_SECRET?.trim() || null,
     dataDir: env.DATA_DIR?.trim() || './data',
+    schedulerEnabled: parseBool(env, 'SCHEDULER_ENABLED', true),
+    batchIntervalSeconds: parsePositiveInt(env, 'BATCH_INTERVAL_SECONDS', 15),
+    batchSize: parsePositiveInt(env, 'BATCH_SIZE', 50),
+    autoSettle: parseBool(env, 'AUTO_SETTLE', true),
+    settleIntervalSeconds: parsePositiveInt(env, 'SETTLE_INTERVAL_SECONDS', 300),
   };
 
   if (!Number.isInteger(config.port) || config.port <= 0 || config.port > 65535) {

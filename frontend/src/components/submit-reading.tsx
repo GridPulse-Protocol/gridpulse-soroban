@@ -35,7 +35,7 @@ export default function SubmitReading() {
     setResult(null);
     try {
       const res = await api.submitReading(form);
-      setResult(`Relayed ${res.meter_id} → net ${res.net_wh} Wh (tx ${res.tx_hash.slice(0, 12)}…)`);
+      setResult(`Queued reading for meter ${res.meter_id} (${res.queue_size} in queue)`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "submission failed");
     } finally {

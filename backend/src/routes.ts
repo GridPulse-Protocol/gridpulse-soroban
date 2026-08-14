@@ -2,8 +2,10 @@
  * HTTP surface for the GridPulse relayer.
  *
  * Reads are served from on-chain state (via the SDK's read-only simulation).
- * Writes (`POST /readings`, `POST /settle`) are relayed to the contract by the
- * relayer account; admin mutations require `ADMIN_SECRET` to be configured.
+ * `POST /readings` validates + queues a signed reading; the background
+ * scheduler (or `POST /flush`) drains the queue to the chain, and `POST
+ * /settle` (or the scheduler) closes a settlement window. Admin mutations
+ * require `ADMIN_SECRET` to be configured.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -13,12 +15,14 @@ import { ContractError } from './chain.js';
 import type { AppConfig } from './config.js';
 import { Relayer, RelayerError } from './relayer.js';
 import type { ReadingInput } from './relayer.js';
+import type { RelayScheduler } from './scheduler.js';
 import { meterToDto } from './types.js';
 
 export interface Services {
   config: AppConfig;
   relayer: Relayer;
   admin: Admin;
+  scheduler: RelayScheduler;
 }
 
 interface Params {
@@ -46,7 +50,7 @@ interface ConfigPatchBody {
 }
 
 export function registerRoutes(app: FastifyInstance, services: Services): void {
-  const { config, relayer, admin } = services;
+  const { config, relayer, admin, scheduler } = services;
 
   app.get('/health', async () => ({
     status: 'ok',
@@ -70,9 +74,18 @@ export function registerRoutes(app: FastifyInstance, services: Services): void {
   // ---- Relayer entry points ----------------------------------------------
 
   app.post<{ Body: ReadingsBody }>('/api/readings', async (request) => {
-    const result = await relayer.relayReading(request.body ?? ({} as ReadingsBody));
-    return { status: 'relayed', ...result };
+    const result = await relayer.enqueueReading(request.body ?? ({} as ReadingsBody));
+    return { status: 'queued', ...result };
   });
+
+  app.post('/api/flush', async () => relayer.flush(config.batchSize));
+
+  app.get('/api/queue', async () => ({
+    size: relayer.queueSize(),
+    readings: relayer.queueList(),
+  }));
+
+  app.get('/api/jobs', async () => scheduler.status());
 
   app.post<{ Body: SettleBody }>('/api/settle', async (request) => {
     const { meter_ids } = request.body ?? {};

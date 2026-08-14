@@ -87,7 +87,9 @@ backend/                        # ── Relayer + REST API (Fastify/TS) ──
     index.ts / server.ts        # entrypoint + wiring
     config.ts                   # env config
     chain.ts                    # typed Soroban client wrapper
-    relayer.ts                  # verify + relay readings, settle
+    relayer.ts                  # verify + queue readings, batch flush, settle
+    queue.ts                    # persistent pending-reading queue (JSON)
+    scheduler.ts                # batch-flush + auto-settle background jobs
     admin.ts                    # operator-only mutations
     signature.ts                # canonical payload + Ed25519 verify
     registry.ts                 # local meter registry (JSON)

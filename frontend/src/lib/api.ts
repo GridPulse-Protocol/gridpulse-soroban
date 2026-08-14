@@ -45,10 +45,15 @@ export const api = {
   overview: () => request<GridOverviewDto>("/api/overview"),
 
   submitReading: (reading: ReadingInput) =>
-    request<{ status: string; meter_id: string; net_wh: string; tx_hash: string }>(
+    request<{ status: string; meter_id: string; queue_size: number }>(
       "/api/readings",
       { method: "POST", body: JSON.stringify(reading) },
     ),
+
+  flush: () =>
+    request<{ submitted: number; dropped: number; remaining: number }>("/api/flush", {
+      method: "POST",
+    }),
 
   settle: (meterIds?: string[]) =>
     request<SettleResult>("/api/settle", {
