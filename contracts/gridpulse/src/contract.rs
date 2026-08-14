@@ -2,12 +2,12 @@
 //! the Soroban host enforces with signatures — a non-admin caller reverts
 //! before any state is touched.
 
-use soroban_sdk::{contract, contractimpl, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 use crate::error::Error;
 use crate::events::MeterAdded;
-use crate::{meter, settle, storage};
 use crate::types::{Config, Meter, Report};
+use crate::{meter, settle, storage};
 
 #[contract]
 pub struct GridPulse;
@@ -24,12 +24,15 @@ impl GridPulse {
         if fee_bps > 10_000 {
             panic!("GridPulse: fee_bps must be <= 10000");
         }
-        storage::write_config(&env, &Config {
-            admin,
-            token,
-            price,
-            fee_bps,
-        });
+        storage::write_config(
+            &env,
+            &Config {
+                admin,
+                token,
+                price,
+                fee_bps,
+            },
+        );
     }
 
     /// Register a meter owned by `owner` and signed by the device key `signer`.

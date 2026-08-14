@@ -63,7 +63,8 @@ pub fn submit(
     // reverts) if the signature is invalid.
     let payload = reading_payload(meter_id, timestamp, generation_wh, consumption_wh, nonce);
     let message = Bytes::from_array(env, &payload);
-    env.crypto().ed25519_verify(&meter.signer, &message, signature);
+    env.crypto()
+        .ed25519_verify(&meter.signer, &message, signature);
 
     // Net watt-hours for this reading: generation minus consumption.
     let delta = (generation_wh as i128) - (consumption_wh as i128);

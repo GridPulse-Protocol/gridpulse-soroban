@@ -2,6 +2,7 @@
 /target
 **/*.wasm
 .soroban/
+**/test_snapshots/
 
 # Node
 node_modules/

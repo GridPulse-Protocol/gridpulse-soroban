@@ -27,11 +27,7 @@ pub fn write_config(env: &Env, config: &Config) {
 
 /// Allocate and return the next meter id.
 pub fn next_meter_id(env: &Env) -> u64 {
-    let id: u64 = env
-        .storage()
-        .instance()
-        .get(&DataKey::NextId)
-        .unwrap_or(1);
+    let id: u64 = env.storage().instance().get(&DataKey::NextId).unwrap_or(1);
     env.storage().instance().set(&DataKey::NextId, &(id + 1));
     id
 }
@@ -60,9 +56,7 @@ pub fn read_net(env: &Env, meter_id: u64) -> i128 {
 
 /// Write a meter's accumulated net watt-hours for the current window.
 pub fn write_net(env: &Env, meter_id: u64, net: i128) {
-    env.storage()
-        .temporary()
-        .set(&DataKey::Net(meter_id), &net);
+    env.storage().temporary().set(&DataKey::Net(meter_id), &net);
 }
 
 /// Remove a meter's net position after settlement.
