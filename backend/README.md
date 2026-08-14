@@ -108,12 +108,32 @@ forwards readings whose signature verifies against the device key stored
 on-chain, and it cannot steal USDC because settlement spends only what each home
 has pre-approved via SEP-41.
 
-## Build
+## Build & test
 
 ```bash
-npm run build    # tsc → dist/
-npm start        # node dist/index.js
+npm run build      # tsc → dist/
+npm run typecheck  # typechecks src/ and test/
+npm test           # node:test suite (offline — no chain/RPC needed)
+npm start          # node dist/index.js
 ```
+
+The test suite covers the pure, security-sensitive logic without a network:
+
+- the canonical 40-byte reading payload and Ed25519 verification
+  (`@noble/ed25519`'s sync API is wired to Node's built-in SHA-512);
+- `parseU64` / `hexToBytes` input validation and its HTTP status mapping;
+- the persistent reading queue and meter registry (restart round-trips);
+- the relayer's validation rules, FIFO batch flush (drop vs. retry semantics),
+  and settlement — against a mock `ChainClient`.
+
+### Error model
+
+Every layer signals client-fixable failures with `HttpError(statusCode)`
+(`backend/src/errors.ts`), and the API maps it straight to that status. Input
+validation (`parseU64`, `hexToBytes`, request bodies) therefore returns `400`,
+not `500`; unknown meters are `404`; stale nonces, inactive meters, and other
+rejected readings are `409`. On-chain `Err(...)` results are surfaced as
+`ContractError` (`409`).
 
 ## Docker
 

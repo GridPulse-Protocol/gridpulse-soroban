@@ -10,6 +10,8 @@
  *    clients never have to worry about JSON's number precision.
  */
 
+import { HttpError } from './errors.js';
+
 /** Native `Config` struct as decoded by the SDK. */
 export interface Config {
   admin: string;
@@ -85,20 +87,20 @@ export function bytesToHex(bytes: Uint8Array): string {
 
 export function hexToBytes(hex: string): Uint8Array {
   const normalized = hex.startsWith('0x') ? hex.slice(2) : hex;
-  if (!/^[0-9a-fA-F]*$/.test(normalized) || normalized.length % 2 !== 0) {
-    throw new Error(`Invalid hex string: ${hex}`);
+  if (normalized.length === 0 || !/^[0-9a-fA-F]*$/.test(normalized) || normalized.length % 2 !== 0) {
+    throw new HttpError(400, `Invalid hex string: ${hex}`);
   }
   return Uint8Array.from(Buffer.from(normalized, 'hex'));
 }
 
 /** Parse a decimal string into a non-negative u64 (bigint). */
-export function parseU64(input: string, field: string): bigint {
-  if (!/^\d+$/.test(input)) {
-    throw new Error(`${field} must be a non-negative decimal integer`);
+export function parseU64(input: string | undefined, field: string): bigint {
+  if (input === undefined || !/^\d+$/.test(input)) {
+    throw new HttpError(400, `${field} must be a non-negative decimal integer`);
   }
   const value = BigInt(input);
   if (value > 0xffffffffffffffffn) {
-    throw new Error(`${field} exceeds u64 range`);
+    throw new HttpError(400, `${field} exceeds u64 range`);
   }
   return value;
 }

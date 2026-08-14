@@ -10,7 +10,9 @@
  * fast while on-chain submission is amortized, rate-limited, and retryable.
  */
 
-import { ContractError, GridPulse } from './chain.js';
+import { ContractError } from './chain.js';
+import type { ChainClient } from './chain.js';
+import { HttpError } from './errors.js';
 import { ReadingQueue } from './queue.js';
 import type { QueuedReading } from './queue.js';
 import { MeterRegistry } from './registry.js';
@@ -19,17 +21,6 @@ import type { ReadingFields } from './signature.js';
 import { bytesToHex, hexToBytes, parseU64 } from './types.js';
 import type { GridOverviewDto, MeterWithPositionDto, ReportDto } from './types.js';
 import { configToDto, meterToDto } from './types.js';
-
-/** Thrown for client-fixable errors (4xx) versus infrastructure errors (5xx). */
-export class RelayerError extends Error {
-  readonly statusCode: number;
-
-  constructor(statusCode: number, message: string) {
-    super(message);
-    this.name = 'RelayerError';
-    this.statusCode = statusCode;
-  }
-}
 
 /** Wire-format of a signed reading accepted by POST /readings. */
 export interface ReadingInput {
@@ -59,7 +50,7 @@ export interface FlushResult {
 
 export class Relayer {
   constructor(
-    readonly chain: GridPulse,
+    readonly chain: ChainClient,
     private readonly registry: MeterRegistry,
     private readonly queue: ReadingQueue,
   ) {}
@@ -163,7 +154,7 @@ export class Relayer {
       : this.registry.list().map((m) => m.id);
 
     if (ids.length === 0) {
-      throw new RelayerError(400, 'no meters to settle — register at least one meter first');
+      throw new HttpError(400, 'no meters to settle — register at least one meter first');
     }
 
     const { hash, report } = await this.chain.settle(ids);
@@ -183,26 +174,26 @@ export class Relayer {
 
     const signature = hexToBytes(raw.signature);
     if (signature.length !== 64) {
-      throw new RelayerError(400, 'signature must be 64 bytes (128 hex chars)');
+      throw new HttpError(400, 'signature must be 64 bytes (128 hex chars)');
     }
 
     const meter = await this.chain.meter(meterId);
-    if (!meter) throw new RelayerError(404, `meter ${meterId} is not registered`);
-    if (!meter.active) throw new RelayerError(409, `meter ${meterId} is inactive`);
+    if (!meter) throw new HttpError(404, `meter ${meterId} is not registered`);
+    if (!meter.active) throw new HttpError(409, `meter ${meterId} is inactive`);
     if (nonce <= meter.nonce) {
-      throw new RelayerError(409, `stale nonce ${nonce} (last accepted ${meter.nonce})`);
+      throw new HttpError(409, `stale nonce ${nonce} (last accepted ${meter.nonce})`);
     }
     const queuedNonce = this.queue.lastQueuedNonce(meterId);
     if (nonce <= queuedNonce) {
-      throw new RelayerError(409, `nonce ${nonce} already queued (highest queued ${queuedNonce})`);
+      throw new HttpError(409, `nonce ${nonce} already queued (highest queued ${queuedNonce})`);
     }
     if (timestamp < meter.last_ts) {
-      throw new RelayerError(409, `stale timestamp ${timestamp} (last ${meter.last_ts})`);
+      throw new HttpError(409, `stale timestamp ${timestamp} (last ${meter.last_ts})`);
     }
 
     const fields: ReadingFields = { meterId, timestamp, generationWh, consumptionWh, nonce };
     if (!verifyReadingSignature(fields, signature, meter.signer)) {
-      throw new RelayerError(400, 'invalid device signature');
+      throw new HttpError(400, 'invalid device signature');
     }
 
     return { fields, signature };

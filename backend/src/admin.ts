@@ -5,24 +5,25 @@
  * with `ADMIN_SECRET` rather than the relayer key.
  */
 
-import { ContractError, GridPulse } from './chain.js';
+import type { ChainClient } from './chain.js';
+import { HttpError } from './errors.js';
 import { MeterRegistry } from './registry.js';
 import { bytesToHex, hexToBytes, parseU64 } from './types.js';
 
-export class AdminUnavailableError extends Error {
+export class AdminUnavailableError extends HttpError {
   constructor() {
-    super('admin operations are disabled: set ADMIN_SECRET to enable them');
+    super(403, 'admin operations are disabled: set ADMIN_SECRET to enable them');
     this.name = 'AdminUnavailableError';
   }
 }
 
 export class Admin {
   constructor(
-    private readonly chain: GridPulse | null,
+    private readonly chain: ChainClient | null,
     private readonly registry: MeterRegistry,
   ) {}
 
-  private requireChain(): GridPulse {
+  private requireChain(): ChainClient {
     if (!this.chain) throw new AdminUnavailableError();
     return this.chain;
   }
@@ -31,7 +32,7 @@ export class Admin {
     const chain = this.requireChain();
     const signer = hexToBytes(signerHex);
     if (signer.length !== 32) {
-      throw new ContractError('signer must be 32 bytes (64 hex chars)');
+      throw new HttpError(400, 'signer must be 32 bytes (64 hex chars)');
     }
 
     const { hash, meterId } = await chain.registerMeter(owner, signer);
@@ -63,7 +64,7 @@ export class Admin {
   async setFeeBps(feeBps: number): Promise<{ tx_hash: string }> {
     const chain = this.requireChain();
     if (!Number.isInteger(feeBps) || feeBps < 0 || feeBps > 10_000) {
-      throw new ContractError('fee_bps must be an integer between 0 and 10000');
+      throw new HttpError(400, 'fee_bps must be an integer between 0 and 10000');
     }
     const { hash } = await chain.setFeeBps(feeBps);
     return { tx_hash: hash };

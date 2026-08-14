@@ -17,6 +17,35 @@ import type { Config, Meter, Report } from './types.js';
 import { reportToDto } from './types.js';
 import type { ReportDto } from './types.js';
 
+/** Arguments accepted by `submit_reading` on the contract. */
+export interface SubmitReadingArgs {
+  meter_id: bigint;
+  timestamp: bigint;
+  generation_wh: bigint;
+  consumption_wh: bigint;
+  nonce: bigint;
+  signature: Uint8Array;
+}
+
+/**
+ * The surface of the GridPulse contract that the rest of the backend depends
+ * on. `GridPulse` is the real implementation; tests substitute a mock so they
+ * never touch the network.
+ */
+export interface ChainClient {
+  readonly contractId: string;
+  readonly signerPublicKey: string;
+  config(): Promise<Config>;
+  meter(meterId: bigint): Promise<Meter | null>;
+  netPosition(meterId: bigint): Promise<bigint>;
+  submitReading(args: SubmitReadingArgs): Promise<{ hash: string }>;
+  settle(meterIds: bigint[]): Promise<{ hash: string; report: ReportDto }>;
+  registerMeter(owner: string, signer: Uint8Array): Promise<{ hash: string; meterId: bigint }>;
+  setMeterActive(meterId: bigint, active: boolean): Promise<{ hash: string }>;
+  setPrice(price: bigint): Promise<{ hash: string }>;
+  setFeeBps(feeBps: number): Promise<{ hash: string }>;
+}
+
 /** Contract method signatures, keyed by their Rust parameter names. */
 export interface GridPulseContract {
   config: () => Promise<AssembledTransaction<Config>>;
@@ -90,7 +119,7 @@ function unwrapOrThrow<T>(result: Result<T>): T {
   throw new ContractError('contract call failed', decodeContractErrorCode(err.message));
 }
 
-export class GridPulse {
+export class GridPulse implements ChainClient {
   readonly contractId: string;
   readonly signerPublicKey: string;
   private readonly networkPassphrase: string;
@@ -143,14 +172,7 @@ export class GridPulse {
 
   // ---- Mutations (relayer-signed) ----------------------------------------
 
-  async submitReading(args: {
-    meter_id: bigint;
-    timestamp: bigint;
-    generation_wh: bigint;
-    consumption_wh: bigint;
-    nonce: bigint;
-    signature: Uint8Array;
-  }): Promise<{ hash: string }> {
+  async submitReading(args: SubmitReadingArgs): Promise<{ hash: string }> {
     const tx = await (await this.c()).submit_reading(args);
     const sent = await tx.signAndSend();
     unwrapOrThrow(sent.result);

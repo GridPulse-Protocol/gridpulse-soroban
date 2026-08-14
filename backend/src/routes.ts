@@ -10,13 +10,14 @@
 
 import type { FastifyInstance } from 'fastify';
 
-import { Admin, AdminUnavailableError } from './admin.js';
+import { Admin } from './admin.js';
 import { ContractError } from './chain.js';
 import type { AppConfig } from './config.js';
-import { Relayer, RelayerError } from './relayer.js';
+import { HttpError } from './errors.js';
+import { Relayer } from './relayer.js';
 import type { ReadingInput } from './relayer.js';
 import type { RelayScheduler } from './scheduler.js';
-import { meterToDto } from './types.js';
+import { meterToDto, parseU64 } from './types.js';
 
 export interface Services {
   config: AppConfig;
@@ -64,10 +65,10 @@ export function registerRoutes(app: FastifyInstance, services: Services): void {
   app.get('/api/overview', async () => relayer.overview());
 
   app.get<{ Params: Params }>('/api/meters/:id', async (request) => {
-    const { id } = request.params;
-    const meter = await relayer.chain.meter(BigInt(id));
-    if (!meter) throw new RelayerError(404, `meter ${id} is not registered`);
-    const net = await relayer.chain.netPosition(BigInt(id));
+    const meterId = parseU64(request.params.id, 'meter_id');
+    const meter = await relayer.chain.meter(meterId);
+    if (!meter) throw new HttpError(404, `meter ${meterId} is not registered`);
+    const net = await relayer.chain.netPosition(meterId);
     return { meter: { ...meterToDto(meter), net_wh: net.toString() } };
   });
 
@@ -96,13 +97,13 @@ export function registerRoutes(app: FastifyInstance, services: Services): void {
 
   app.post<{ Body: RegisterMeterBody }>('/api/admin/meters', async (request) => {
     const { owner, signer } = request.body ?? ({} as RegisterMeterBody);
-    if (!owner || !signer) throw new RelayerError(400, 'owner and signer are required');
+    if (!owner || !signer) throw new HttpError(400, 'owner and signer are required');
     return admin.registerMeter(owner, signer);
   });
 
   app.patch<{ Params: Params; Body: ActiveBody }>('/api/admin/meters/:id/active', async (request) => {
     const { active } = request.body ?? ({} as ActiveBody);
-    if (typeof active !== 'boolean') throw new RelayerError(400, 'active must be a boolean');
+    if (typeof active !== 'boolean') throw new HttpError(400, 'active must be a boolean');
     return admin.setMeterActive(request.params.id, active);
   });
 
@@ -112,7 +113,7 @@ export function registerRoutes(app: FastifyInstance, services: Services): void {
     if (price !== undefined) result.price = await admin.setPrice(price);
     if (fee_bps !== undefined) result.fee_bps = await admin.setFeeBps(fee_bps);
     if (Object.keys(result).length === 0) {
-      throw new RelayerError(400, 'nothing to update: provide price and/or fee_bps');
+      throw new HttpError(400, 'nothing to update: provide price and/or fee_bps');
     }
     return result;
   });
@@ -120,8 +121,7 @@ export function registerRoutes(app: FastifyInstance, services: Services): void {
 
 /** Convert a thrown error to an HTTP status code + body. */
 export function mapError(err: unknown): { statusCode: number; message: string } {
-  if (err instanceof RelayerError) return { statusCode: err.statusCode, message: err.message };
-  if (err instanceof AdminUnavailableError) return { statusCode: 403, message: err.message };
+  if (err instanceof HttpError) return { statusCode: err.statusCode, message: err.message };
   if (err instanceof ContractError) return { statusCode: 409, message: err.message };
   if (err instanceof Error) return { statusCode: 500, message: err.message };
   return { statusCode: 500, message: 'internal error' };

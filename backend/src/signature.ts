@@ -12,7 +12,19 @@
  * the contract's `ed25519_verify` host trap.
  */
 
-import { verify } from '@noble/ed25519';
+import { createHash } from 'node:crypto';
+
+import { etc, verify } from '@noble/ed25519';
+
+// noble-ed25519's synchronous API does not bundle a SHA-512 implementation:
+// `etc.sha512Sync` is `undefined` by default and must be provided before
+// `verify` (or any other sync primitive) is called. We wire in Node's built-in
+// crypto so the relayer needs no extra hash dependency.
+etc.sha512Sync = (...messages: Uint8Array[]): Uint8Array => {
+  const hash = createHash('sha512');
+  for (const message of messages) hash.update(message);
+  return new Uint8Array(hash.digest());
+};
 
 export const PAYLOAD_LEN = 40;
 
