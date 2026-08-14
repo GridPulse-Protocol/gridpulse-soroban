@@ -1,0 +1,6 @@
+# Soroban contracts target `wasm32v1-none`, which requires Rust 1.84+.
+# `stellar contract build` manages the exact target; pinning the channel here
+# keeps local `cargo test` / `cargo fmt` / `cargo clippy` reproducible.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

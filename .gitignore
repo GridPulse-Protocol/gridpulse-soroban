@@ -1,0 +1,20 @@
+# Rust / Soroban
+/target
+**/*.wasm
+.soroban/
+
+# Node
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+# Local configuration & secrets
+.env
+.env.local
+.env.*.local
+data/
+
+# Logs & editor noise
+*.log
+.DS_Store
