@@ -8,7 +8,7 @@
  * into idiomatic thrown errors.
  */
 
-import { Keypair, xdr } from '@stellar/stellar-sdk';
+import { Keypair, StrKey, xdr } from '@stellar/stellar-sdk';
 import { Client, basicNodeSigner } from '@stellar/stellar-sdk/contract';
 import type { AssembledTransaction, Result } from '@stellar/stellar-sdk/contract';
 
@@ -93,23 +93,35 @@ function unwrapOrThrow<T>(result: Result<T>): T {
 export class GridPulse {
   readonly contractId: string;
   readonly signerPublicKey: string;
-  private client: Promise<Client & GridPulseContract>;
+  private readonly networkPassphrase: string;
+  private readonly rpcUrl: string;
+  private readonly signer: ReturnType<typeof basicNodeSigner>;
+  private client?: Promise<Client & GridPulseContract>;
 
   constructor(cfg: AppConfig, secret: string) {
     this.contractId = cfg.contractId;
+    if (!StrKey.isValidContract(cfg.contractId)) {
+      throw new Error(`Invalid contract id: ${cfg.contractId}`);
+    }
+
     const signer = Keypair.fromSecret(secret);
     this.signerPublicKey = signer.publicKey();
-
-    this.client = Client.from<GridPulseContract>({
-      contractId: cfg.contractId,
-      networkPassphrase: cfg.networkPassphrase,
-      rpcUrl: cfg.rpcUrl,
-      publicKey: signer.publicKey(),
-      ...basicNodeSigner(signer, cfg.networkPassphrase),
-    });
+    this.networkPassphrase = cfg.networkPassphrase;
+    this.rpcUrl = cfg.rpcUrl;
+    this.signer = basicNodeSigner(signer, cfg.networkPassphrase);
   }
 
-  private async c(): Promise<Client & GridPulseContract> {
+  // The client is created lazily so an unreachable RPC or a spec-fetch failure
+  // surfaces as an error on the request that needs it, instead of an unhandled
+  // rejection that crashes the whole process at boot.
+  private c(): Promise<Client & GridPulseContract> {
+    this.client ??= Client.from<GridPulseContract>({
+      contractId: this.contractId,
+      networkPassphrase: this.networkPassphrase,
+      rpcUrl: this.rpcUrl,
+      publicKey: this.signerPublicKey,
+      ...this.signer,
+    });
     return this.client;
   }
 

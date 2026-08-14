@@ -1,0 +1,35 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    environment:
+      NETWORK: ${NETWORK:-testnet}
+      # Required. The backend fails fast at startup with a clear error if these
+      # are left empty (see backend/.env.example). Defaults for RPC_URL /
+      # NETWORK_PASSPHRASE come from NETWORK; add them here to override.
+      CONTRACT_ID: ${CONTRACT_ID:-}
+      RELAYER_SECRET: ${RELAYER_SECRET:-}
+      ADMIN_SECRET: ${ADMIN_SECRET:-}
+      DATA_DIR: /data
+    volumes:
+      - gridpulse-data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The API URL is inlined into the browser bundle at build time, so it
+        # must be reachable from the user's browser (not the container network).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        NEXT_PUBLIC_NETWORK: ${NETWORK:-testnet}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  gridpulse-data:

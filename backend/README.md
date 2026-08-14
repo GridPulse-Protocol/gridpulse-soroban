@@ -81,3 +81,9 @@ has pre-approved via SEP-41.
 npm run build    # tsc → dist/
 npm start        # node dist/index.js
 ```
+
+## Docker
+
+A multi-stage `Dockerfile` is included and wired into the root
+`docker-compose.yml` — run the whole stack with `docker compose up -d --build`
+from the repo root.

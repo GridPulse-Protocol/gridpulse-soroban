@@ -137,6 +137,25 @@ storage.
 See `backend/README.md` and `frontend/README.md` for the API surface and
 wallet/approve flow.
 
+## Run with Docker
+
+The backend and frontend ship with multi-stage Dockerfiles and a root
+`docker-compose.yml` that runs them together:
+
+```bash
+cp .env.example .env       # fill in CONTRACT_ID and RELAYER_SECRET
+docker compose up -d --build
+```
+
+* Backend → http://localhost:4000 (`/health` to confirm it is up)
+* Frontend → http://localhost:3000
+
+The frontend waits for the backend to report healthy before starting, and the
+meter registry persists in a named volume (`gridpulse-data`). The API URL is
+baked into the frontend image at build time (default `http://localhost:4000`);
+set `NEXT_PUBLIC_API_URL` in `.env` and rebuild if the backend is reachable
+from a different host.
+
 ## Build, test, lint
 
 ```bash

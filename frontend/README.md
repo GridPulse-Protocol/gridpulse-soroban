@@ -33,6 +33,12 @@ see [`../backend`](../backend) for how to start it.
 | `NEXT_PUBLIC_API_URL` | `http://localhost:4000` | Backend REST API base URL |
 | `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network for wallet interactions |
 
+## Docker
+
+A multi-stage `Dockerfile` (using Next.js `output: "standalone"`) is included
+and wired into the root `docker-compose.yml` — run the whole stack with
+`docker compose up -d --build` from the repo root.
+
 ## Notes
 
 - All on-chain integers are surfaced as decimal strings (the backend converts
